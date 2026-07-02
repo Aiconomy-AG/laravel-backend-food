@@ -3,13 +3,8 @@
 use App\Http\Controllers\RecipeController;
 use Illuminate\Support\Facades\Route;
 
-// Forțăm toate rutele să aibă prefixul api/ și numele api.recipes
-Route::group(['prefix' => 'api', 'as' => 'api.'], function () {
+// 1. Rutele specifice / custom se pun MEREU primele:
+Route::get('/recipes/random-recipe', [RecipeController::class, 'random']);
 
-    // Ruta de random complet izolată
-    Route::get('recipes/random', [RecipeController::class, 'random']);
-
-    // Resursa standard de rețete
-    Route::apiResource('recipes', RecipeController::class);
-
-});
+// 2. Resursa se pune ultima:
+Route::apiResource('recipes', RecipeController::class);
