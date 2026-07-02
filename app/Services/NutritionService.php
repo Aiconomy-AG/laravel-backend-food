@@ -50,8 +50,15 @@ class NutritionService
      */
     private const PROCESSED_FORM_HINTS = [
         'dried', 'juice', 'butter', 'candie', 'candy', 'dessert', 'cracker',
-        'chip', 'powder', 'sauce', 'extract', 'concentrate', 'canned',
-        'syrup', 'jam', 'jelly', 'dehydrated', 'sweetened',
+        'crackers', 'chip', 'chips', 'powder', 'sauce', 'extract',
+        'concentrate', 'canned', 'syrup', 'jam', 'jelly', 'dehydrated',
+        'sweetened', 'nugget', 'nuggets', 'breaded', 'battered', 'roll',
+        'rolls', 'sausage', 'sausages', 'stick', 'sticks', 'mix', 'flavored',
+        'flavor', 'frozen', 'meal', 'dinner', 'soup', 'pie', 'cake', 'pizza',
+        'sandwich', 'fried', 'stuffed', 'loaf', 'loaves', 'patty', 'patties',
+        'imitation', 'substitute', 'spread', 'paste', 'broth', 'stock',
+        'gravy', 'seasoned', 'marinated', 'smoked', 'cured', 'processed',
+        'formed', 'restructured', 'coated',
     ];
 
     /**
@@ -104,7 +111,7 @@ class NutritionService
         $response = Http::get('https://api.nal.usda.gov/fdc/v1/foods/search', [
             'api_key' => $apiKey,
             'query' => $searchTerm,
-            'pageSize' => 15,
+            'pageSize' => 25,
             'dataType' => 'Foundation,SR Legacy',
         ]);
 
@@ -216,7 +223,8 @@ class NutritionService
         $description = strtolower($description);
 
         foreach (self::PROCESSED_FORM_HINTS as $hint) {
-            if (str_contains($description, $hint)) {
+            // Word-boundary match so e.g. "meal" doesn't flag "cornmeal".
+            if (preg_match('/\b'.preg_quote($hint, '/').'\b/', $description)) {
                 return true;
             }
         }
