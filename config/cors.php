@@ -19,7 +19,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => ['*'], // Permite frontend-ului tău să comunice liber cu backend-ul
 
     'allowed_origins_patterns' => [],
 

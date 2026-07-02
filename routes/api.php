@@ -3,8 +3,8 @@
 use App\Http\Controllers\RecipeController;
 use Illuminate\Support\Facades\Route;
 
-// 1. Rutele specifice / custom se pun MEREU primele:
+// Ruta custom pentru rețeta random (TREBUIE să fie prima ca să evite 404)
 Route::get('/recipes/random-recipe', [RecipeController::class, 'random']);
 
-// 2. Resursa se pune ultima:
+// Resursa automată (generează GET /recipes, POST /recipes, DELETE /recipes/{id})
 Route::apiResource('recipes', RecipeController::class);
