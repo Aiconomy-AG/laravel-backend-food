@@ -13,10 +13,12 @@ class Recipe extends Model
         'title',
         'cook_time',
         'ingredients',
-        'instructions'
+        'instructions',
+        'macros',
     ];
-    
+
     protected $casts = [
         'ingredients' => 'array',
+        'macros' => 'array',
     ];
 }

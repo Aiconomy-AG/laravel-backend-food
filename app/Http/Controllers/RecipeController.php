@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Recipe;
+use App\Services\NutritionService;
 use Illuminate\Http\Request;
 
 class RecipeController extends Controller
 {
+    public function __construct(private NutritionService $nutritionService) {}
+
     public function index()
     {
         return response()->json(Recipe::latest()->get());
@@ -21,6 +24,8 @@ class RecipeController extends Controller
             'instructions' => 'required|string',
         ]);
 
+        $validated['macros'] = $this->nutritionService->calculate($validated['ingredients']);
+
         $recipe = Recipe::create($validated);
 
         return response()->json($recipe, 201);
@@ -29,6 +34,7 @@ class RecipeController extends Controller
     public function destroy(Recipe $recipe)
     {
         $recipe->delete();
+
         return response()->json(['message' => 'Rețetă ștearsă!']);
     }
 
@@ -36,7 +42,7 @@ class RecipeController extends Controller
     {
         $randomRecipe = Recipe::inRandomOrder()->first();
 
-        if (!$randomRecipe) {
+        if (! $randomRecipe) {
             return response()->json(['message' => 'Nicio rețetă!'], 404);
         }
 

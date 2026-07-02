@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'apininjas' => [
+        'key' => env('API_NINJAS_KEY'),
+    ],
+
+    'usda' => [
+        'key' => env('USDA_API_KEY', 'DEMO_KEY'),
+    ],
+
 ];
