@@ -55,17 +55,11 @@ class NutritionService
     ];
 
     /**
-     * Calculate aggregated macros for a list of free-text ingredients
-     * (e.g. "2 eggs", "100g flour") by matching each one against the
-     * USDA FoodData Central database and summing its macros, scaled by
-     * the quantity found in the ingredient text.
-     *
-     * Quantity handling is approximate: a recognized weight/volume unit
-     * (g, kg, ml, l, cup, tbsp, tsp, oz, lb) is converted to grams and
-     * scaled against the per-100g USDA values. A bare count with no unit
-     * (e.g. "2 eggs") is treated as "N reference 100g servings" since we
-     * have no per-item gram weight to work with — good enough to make
-     * quantity matter, not gram-accurate.
+     * Calculate aggregated macros for a list of ingredients written as
+     * "<grams>g <food>" (e.g. "100g eggs", "50g flour") by matching each
+     * one against the USDA FoodData Central database and scaling its
+     * per-100g macros by the given weight. Ingredients without a gram
+     * amount fall back to a single 100g reference serving.
      *
      * @param  array<int, string>  $ingredients
      * @return array{calories: ?float, protein_g: ?float, carbohydrates_g: ?float, fat_g: ?float, sugar_g: ?float, items: array}
@@ -78,7 +72,7 @@ class NutritionService
             return $this->emptyResult();
         }
 
-        $cacheKey = 'nutrition:usda:v2:'.md5(implode('|', $ingredients));
+        $cacheKey = 'nutrition:usda:v3:'.md5(implode('|', $ingredients));
 
         return Cache::remember($cacheKey, now()->addDays(7), function () use ($ingredients) {
             $items = array_values(array_filter(
@@ -98,14 +92,14 @@ class NutritionService
 
     /**
      * Search USDA FoodData Central for the best match of a single
-     * ingredient and return its macros scaled by quantity, or null on
-     * no match/error.
+     * ingredient and return its macros scaled by its gram amount, or
+     * null on no match/error.
      */
     private function lookup(string $ingredient): ?array
     {
         $apiKey = config('services.usda.key');
 
-        [$searchTerm, $multiplier] = $this->parseQuantity($ingredient);
+        [$searchTerm, $multiplier] = $this->parseGrams($ingredient);
 
         $response = Http::get('https://api.nal.usda.gov/fdc/v1/foods/search', [
             'api_key' => $apiKey,
@@ -146,40 +140,32 @@ class NutritionService
     }
 
     /**
-     * Split an ingredient like "2 eggs" or "100g flour" into a plain-text
-     * search term and a multiplier over USDA's per-100g nutrient values.
+     * Split an ingredient like "100g eggs" into a plain-text search term
+     * ("eggs") and a multiplier over USDA's per-100g nutrient values
+     * (1.0 for 100g). Ingredients with no gram amount (e.g. "eggs" with
+     * no weight) default to a single 100g reference serving.
      *
      * @return array{0: string, 1: float}
      */
-    private function parseQuantity(string $ingredient): array
+    private function parseGrams(string $ingredient): array
     {
         $matched = preg_match(
-            '/^\s*(\d+[.,]?\d*)\s*(g|kg|ml|l|cup|cups|tbsp|tsp|oz|lb|lbs)?\s*/iu',
+            '/^\s*(\d+[.,]?\d*)\s*(g|kg)\s*/iu',
             $ingredient,
             $matches
         );
 
-        $searchTerm = $matched
-            ? trim(mb_substr($ingredient, mb_strlen($matches[0])))
-            : $ingredient;
+        if (! $matched) {
+            return [$ingredient, 1.0];
+        }
+
+        $searchTerm = trim(mb_substr($ingredient, mb_strlen($matches[0])));
         $searchTerm = $searchTerm !== '' ? $searchTerm : $ingredient;
 
-        if (! $matched) {
-            return [$searchTerm, 1.0];
-        }
+        $grams = (float) str_replace(',', '.', $matches[1]);
+        $grams *= strtolower($matches[2]) === 'kg' ? 1000 : 1;
 
-        $quantity = (float) str_replace(',', '.', $matches[1]);
-        $unit = isset($matches[2]) ? strtolower($matches[2]) : null;
-
-        if ($unit !== null && isset(self::GRAMS_PER_UNIT[$unit])) {
-            $grams = $quantity * self::GRAMS_PER_UNIT[$unit];
-
-            return [$searchTerm, $grams / 100];
-        }
-
-        // No recognized weight/volume unit: treat as "N whole items",
-        // approximated as N reference 100g servings.
-        return [$searchTerm, $quantity > 0 ? $quantity : 1.0];
+        return [$searchTerm, $grams > 0 ? $grams / 100 : 1.0];
     }
 
     /**
@@ -188,7 +174,8 @@ class NutritionService
      * "milk" can rank "Crackers, milk" above "Milk, whole"), so instead:
      * prefer descriptions that start with the search term, then prefer
      * "raw"/unprocessed forms over dried, juiced, candied, etc, then
-     * prefer the shortest (usually plainest) description.
+     * prefer descriptions containing "whole" (the complete/default form),
+     * then prefer the shortest (usually plainest) description.
      */
     private function bestMatch(array $foods, string $searchTerm): array
     {
@@ -208,6 +195,15 @@ class NutritionService
 
         if (! empty($raw)) {
             $candidates = $raw;
+        }
+
+        $whole = array_values(array_filter(
+            $candidates,
+            fn (array $f) => str_contains(strtolower($f['description']), 'whole')
+        ));
+
+        if (! empty($whole)) {
+            $candidates = $whole;
         }
 
         usort($candidates, fn (array $a, array $b) => strlen($a['description']) <=> strlen($b['description']));
